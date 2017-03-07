@@ -44,10 +44,14 @@ Segments are named by their base offset. The base offset of a segment is an offs
 
 On disk, a partition is a directory and each segment is an index file and a log file.
 Each message is its value, offset, timestamp, key, message size, compression codec, checksum, and version of the message format.
-The data format on disk is exactly the same as what the broker receives from the producer over the network and sends to its consumers. This allows Kafka to efficiently transfer data with [zero copy](https://www.ibm.com/developerworks/library/j-zerocopy/).
 
 Each broker holds a number of partitions and each topic partition is replicated *n* times, where *n* is the replication factor of the topic. This allows Kafka to automatically failover to these replicas when a server in the cluster fails, so that partitions stay writeable and messages remain available. Out of the *n* replicas, one replica is designated as the *leader* for a partition, while the remaining replicas are *followers*.
 All writes and reads for a partition are served through the leader. Partitions - as well as leadership - are balanced within a cluster in a round-robin fashion to have an evenly distributed load.
+
+The data format on disk is exactly the same as what the broker receives from the producer over the network and sends to its consumers. This allows Kafka to efficiently transfer data with [zero copy](https://www.ibm.com/developerworks/library/j-zerocopy/).
+Maintaining this common format allows optimization of the most important operation: network transfer of persistent log chunks. Modern unix operating systems offer a highly optimized code path for transferring data out of pagecache to a socket; in Linux this is done with the sendfile system call.
+Using the zero-copy optimization, data is copied into pagecache exactly once and reused on each consumption instead of being stored in memory and copied out to user-space every time it is read. This allows messages to be consumed at a rate that approaches the limit of the network connection.
+This combination of pagecache and sendfile means that on a Kafka cluster where the consumers are mostly caught up you will see no read activity on the disks whatsoever as they will be serving data entirely from cache.
 
 #### Replication
 Kafka supports intra-cluster replication, which provides higher availability and durability. A partition can have multiple replicas, each stored on a different broker. One of the replicas is designated as the leader and the rest of the replicas are followers. Internally, Kafka manages all those replicas automatically and makes sure that they are kept in sync. Both the producer and the consumer requests to a partition are served on the leader replica. When a broker fails, partitions with a leader on that broker become temporarily unavailable. Kafka will automatically move the leader of those unavailable partitions to some other replicas to continue serving the client requests. This process is done by one of the Kafka brokers designated as the controller. It involves reading and writing some metadata for each affected partition in ZooKeeper. Currently, operations to ZooKeeper are done serially in the controller.
@@ -84,6 +88,9 @@ When a group is first initialized, the consumers typically begin reading from ei
 When a partition gets reassigned to another consumer in the group, the initial position is set to the last committed offset. If the consumer in the example above suddenly crashed, then the group member taking over the partition would begin consumption from offset 1. In that case, it would have to reprocess the messages up to the crashed consumerâ€™s position of 6.
 
 The diagram also shows two other significant positions in the log. The log end offset is the offset of the last message written to the log. The high watermark is the offset of the last message that was successfully copied to all of the logâ€™s replicas. From the perspective of the consumer, the main thing to know is that you can only read up to the high watermark. This prevents the consumer from reading unreplicated data which could later be lost.
+
+The consumer works by sending pull requests to the brokers leading the partitions it wants to consume. The consumer specifies its offset in the log with each request and receives back a chunk of log beginning from that position. The consumer thus has significant control over this position and can rewind it to re-consume data if need be.
+In this pull-based design the consumer always pulls all available messages after its current position in the log (or up to some configurable max size). So one gets optimal batching without introducing unnecessary latency.
 
 
 
