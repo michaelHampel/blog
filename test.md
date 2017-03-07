@@ -10,7 +10,7 @@ Basic useful feature list:
 
 I'm no good at writing sample / filler text, so go write something yourself.
 
-![alt text](https://github.com/michaelHampel/blog/images/kafka-apis.png "Title")
+![alt text](images/kafka-apis.png "Title")
 
 Look, a list!
 
