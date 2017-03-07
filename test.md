@@ -34,15 +34,6 @@ Another way to see a partition is as a log - each partition of a topic correspon
 When Kafka writes to a partition, it writes to a segmentâ€Šâ€”â€Šthe active segment. If the segmentâ€™s size limit is reached, a new segment is opened and that becomes the new active segment.
 Segments are named by their base offset. The base offset of a segment is an offset greater than offsets in previous segments and less than or equal to offsets in that segment.
 On disk, a partition is a directory and each segment is an index file and a log file.
-
-~~~ $ tree kafka | head -n 6
-kafka
-â”œâ”€â”€ events-1
-â”‚ â”œâ”€â”€ 00000000003064504069.index
-â”‚ â”œâ”€â”€ 00000000003064504069.log
-â”‚ â”œâ”€â”€ 00000000003065011416.index
-â”‚ â”œâ”€â”€ 00000000003065011416.log
-~~~
 Each message is its value, offset, timestamp, key, message size, compression codec, checksum, and version of the message format.
 The data format on disk is exactly the same as what the broker receives from the producer over the network and sends to its consumers. This allows Kafka to efficiently transfer data with [zero copy](https://www.ibm.com/developerworks/library/j-zerocopy/).
 
